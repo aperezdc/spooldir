@@ -7,6 +7,7 @@
 
 #include "dbg.h"
 #include "spooldir.h"
+#include "hexify/hexify.h"
 #include "hmac-sha256/hmac-sha256.h"
 #include <string.h>
 #include <stdlib.h>
@@ -122,11 +123,9 @@ spoolkey_new (void)
     key->inheap = false;
     key->length = RNG_KEY_SIZE * 2;
     key->bytes = (char*) &key[1];
-
-    /* Make the digest into an hex string. */
-    for (size_t i = 0; i < HMAC_SHA256_DIGEST_SIZE; i++) {
-        snprintf (key->bytes + i * 2, 3, "%02x", digest[i]);
-    }
+    int nbytes = hexify (digest, HMAC_SHA256_DIGEST_SIZE, key->bytes, key->length + 1);
+    assert_equal (nbytes, key->length);
+    (void) nbytes;
     return key;
 }
 
