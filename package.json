@@ -1,0 +1,12 @@
+{
+  "name": "spooldir",
+  "version": "0.0.1",
+  "repo": "aperezdc/spooldir",
+  "description": "Data queue using Maildir-style directories",
+  "license": "MIT",
+  "dependencies": {
+    "stephenmathieson/assertion-macros.h": "0.3.0",
+    "aperezdc/apicheck": "0.1.1",
+    "aperezdc/hmac-sha256": "0.1.1"
+  }
+}
