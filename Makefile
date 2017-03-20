@@ -1,5 +1,5 @@
 CPPFLAGS += -Ideps
-CFLAGS   += -Wall -std=c11 -pthread
+CFLAGS   += -Wall -std=c11 -pthread $(OPT_CFLAGS)
 LDLIBS   += -pthread
 
 C := spool.c spooldir.c \
