@@ -8,6 +8,7 @@
     "stephenmathieson/assertion-macros.h": "0.3.0",
     "aperezdc/apicheck": "0.1.1",
     "aperezdc/hmac-sha256": "0.1.1",
-    "pepaslabs/hexify.c": "0.0.1"
+    "pepaslabs/hexify.c": "0.0.1",
+    "stephenmathieson/mkdirp.c": "0.1.5"
   }
 }

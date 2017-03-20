@@ -8,6 +8,9 @@
 #ifndef SPOOLDIR_H
 #define SPOOLDIR_H
 
+#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE 1
+
 #include <stdint.h>
 #include <string.h>
 
@@ -45,11 +48,16 @@ const char* spoolkey_cstr (const spoolkey *key);
 void spoolkey_free (spoolkey *key);
 
 
-enum spooldir_flags {
-    SPOOLDIR_OPEN   = 1 << 0,
-    SPOOLDIR_CREATE = 1 << 1,
-} spooldir_flags;
-
+/*
+ * Status of an element in a spool dir.
+ */
+enum spooldir_status {
+    SPOOLDIR_STATUS_TMP,  /* An element is in an undefined state. */
+    SPOOLDIR_STATUS_NEW,  /* An element is new and just added. */
+    SPOOLDIR_STATUS_WIP,  /* An element is being inspected for handling. */
+    SPOOLDIR_STATUS_CUR,  /* An element has been picked for handling. */
+    SPOOLDIR_STATUS_FIN,  /* An element has left the spool directory. */
+};
 
 /*
  * Represents a transaction. All the transactions have a pair of functions
@@ -57,29 +65,42 @@ enum spooldir_flags {
  * populates a "spooltxn", and spooldir_<name>_commit() finalizes the
  * transaction.
  */
+enum { SPOOLTXN__PAD = 4 * sizeof (uintptr_t) };
+
 typedef struct {
-    const spoolkey *key;
-    int fd;
+    enum spooldir_status status;
+    spoolkey            *key;
+    int                  fd;
+    uint8_t              __pad[SPOOLTXN__PAD];  /* For future expansion. */
 } spooltxn;
 
+spoolkey* spooltxn_take_key (spooltxn *txn);
+int spooltxn_take_fd (spooltxn *txn);
 
 /*
- * Opens a spool directory, optionally creating it. The "mode" parameter
- * determines the permissions of the created spool directories and files
- * on disk, as in open(2).
+ * Opens a spool directory given an open file descriptor to a directory.
  */
-spooldir* spooldir_open (const char *path, enum spooldir_flags flags, int mode);
+spooldir* spooldir_open (int dir_fd);
 
 /*
- * Obtains the path where the spool directory resides on disk. The returned
- * string is owned by the spool directory and must *not* be freed.
  */
-const char* spooldir_path (const spooldir *spool);
+spooldir* spooldir_open_path (const char *path, uint32_t mode);
 
 /*
  * Closes a spool directory, possibly freeing resources.
  */
 void spooldir_close (spooldir *spool);
+
+/*
+ * Low-level interface to open files under the spoold directory.
+ */
+int spooldir__open_file (spooldir *spool, const spoolkey *key,
+                         enum spooldir_status status, int oflag);
+
+/*
+ */
+int spooldir_commit (spooldir *spool, spooltxn *txn);
+int spooldir_rollback (spooldir *spool, spooltxn *txn);
 
 /*
  * Starts the creation of a new element in the spool directory.
@@ -93,39 +114,19 @@ void spooldir_close (spooldir *spool);
  * failure is returned.
  */
 int spooldir_add (spooldir *spool, spooltxn *txn);
-int spooldir_add_commit (spooldir *spool, spooltxn *txn);
 
 /*
  */
-int spooldir_open_new (spooldir *spool, const spoolkey *key);
-int spooldir_open_cur (spooldir *spool, const spoolkey *key);
+int spooldir_pick (spooldir *spool, spooltxn *txn);
 
 /*
  */
-int spooldir_handle (spooldir *spool, const spoolkey *key, spooltxn *txn);
-int spooldir_handle_commit (spooldir *spool, spooltxn *txn);
+int spooldir_delete (spooldir *spool, const spoolkey *key);
 
 /*
- * Checks whether an element exists in the spool directory, but it has
- * not yet been fetched from it (i.e. it is "new").
  */
-_Bool spooldir_is_new (const spooldir *spool, const spoolkey *key);
-
-/*
- * Checks whether an element exists in the spool directory, and it has
- * already been fetched (i.e. it is not "new").
- */
-_Bool spooldir_is_cur (const spooldir *spool, const spoolkey *key);
-
-/*
- * These values are passed to callback functions, and they indicate what is
- * the status of the element being notified.
- */
-enum spooldir_status {
-    SPOOLDIR_STATUS_NEW,  /* A "new" element has been added. */
-    SPOOLDIR_STATUS_CUR,  /* An element has been picked for handling. */
-    SPOOLDIR_STATUS_FIN,  /* An element has left the spool directory. */
-};
+_Bool spooldir_has_status (const spooldir *spool, const spoolkey *key,
+                           enum spooldir_status status);
 
 /*
  * Type of callback functions used for notifying of element status. The
