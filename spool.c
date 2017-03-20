@@ -48,14 +48,13 @@ copy_contents (FILE *i, FILE *o)
     uint8_t buffer[COPY_BUFSZ];
     size_t count;
 
-    while ((count = fread (buffer, 1, COPY_BUFSZ, i)) > 0 && !feof (i)) {
+    while ((count = fread (buffer, 1, COPY_BUFSZ, i)) > 0) {
         if (ferror (i))
             return false;
         if (fwrite (buffer, 1, count, o) < count && ferror (o))
             return false;
     }
-
-    return true;
+    return !!feof(i);
 }
 
 
