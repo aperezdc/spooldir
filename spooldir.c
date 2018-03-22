@@ -357,6 +357,52 @@ status_to_fd (const spooldir *spool, enum spooldir_status status)
 }
 
 
+/*
+ * We cannot directly rename() files, because that could overwrite existing
+ * files at the destination directory. Instead, prefer to use link(), which
+ * behaves atomically:
+ *
+ *    1. Link the file under the destination directory.
+ *    2. Open the file at the destination directory. On failure:
+ *         2.1. Unlink from the destination directory.
+ *    3. Unlink from the source directory. On failure:
+ *         3.1. Unlink from the destination directory.
+ *         3.2. Close the open file descriptor.
+ */
+static inline int
+relink_and_open (int src_fd, int dst_fd, const char *name)
+{
+    assert_ok (src_fd >= 0);
+    assert_ok (dst_fd >= 0);
+    assert_ok (name != NULL);
+
+    int retval = -1;
+    int fd = -1;
+
+    if ((retval = linkat (src_fd, name, dst_fd, name, 0)) < 0) {
+        retval = -errno;
+        goto error;
+    }
+    if ((fd = openat (dst_fd, name, O_RDWR | SPOOLDIR_FILE_O_FLAGS, 0)) < 0) {
+        retval = -errno;
+        goto error_unlink_dst;
+    }
+    if ((retval = unlinkat (src_fd, name, 0)) <  0) {
+        retval = -errno;
+        goto error_unlink_dst_close_fd;
+    }
+    return fd;
+
+error_unlink_dst_close_fd:
+    assert_ok (fd >= 0);
+    close (fd);
+error_unlink_dst:
+    unlinkat (dst_fd, name, 0);
+error:
+    return retval;
+}
+
+
 int
 spooldir__open_file (spooldir *spool, const spoolkey *key,
                      enum spooldir_status status, int oflag)
@@ -469,6 +515,75 @@ spooldir_rollback (spooldir *spool, spooltxn *txn)
     if (txn->fd >= 0) {
         close (txn->fd);
         txn->fd = -1;
+    }
+    return retval;
+}
+
+
+struct pick_txn {
+    spooltxn txn_base;
+    DIR     *dirp;
+};
+
+
+int
+spooldir_pick (spooldir *spool, spooltxn *txn)
+{
+    api_check_return_val (spool, -1);
+    api_check_return_val (spool->new_fd >= 0, -1);
+    api_check_return_val (spool->wip_fd >= 0, -1);
+    api_check_return_val (txn, -1);
+
+    struct pick_txn *ptxn = (struct pick_txn*) txn;
+
+    int dir_fd = dup (spool->new_fd);
+    if (dir_fd < 0)
+        return dir_fd;
+
+    if (!(ptxn->dirp = fdopendir (dir_fd)))
+        return -1;
+
+    struct dirent *de = NULL;
+    int retval = -1;
+
+    for (;;) {
+        errno = 0;
+        if (!(de = readdir (ptxn->dirp))) {
+            if (!errno) retval = EOF;
+            goto cleanup;
+        }
+
+        if (de->d_name[0] == '.')  /* Skip hidden files */
+            continue;
+
+        /* Use fstatat() as fall-back to fill the field. */
+        if (de->d_type == DT_UNKNOWN) {
+            struct stat sb;
+            if (fstatat (spool->new_fd, de->d_name, &sb, AT_SYMLINK_NOFOLLOW) < 0)
+                goto cleanup;
+            if (S_ISREG (sb.st_mode))  /* We are only interested in regular files */
+                de->d_type = DT_REG;
+        }
+
+        if (de->d_type == DT_REG)
+            break;
+    }
+
+    if ((txn->fd = relink_and_open (spool->new_fd, spool->wip_fd, de->d_name)) < 0)
+        goto cleanup;
+
+    txn->key = spoolkey_new_from_string (de->d_name, true, true);
+    txn->status = SPOOLDIR_STATUS_WIP;
+    return 0;
+
+cleanup:
+    {
+        int saved_errno = errno;  /* Can be changed by closedir. */
+        if (ptxn->dirp) {
+            closedir (ptxn->dirp);
+            ptxn->dirp = NULL;
+        }
+        errno = saved_errno;
     }
     return retval;
 }
