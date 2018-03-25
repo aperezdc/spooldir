@@ -58,8 +58,8 @@ copy_contents (FILE *i, FILE *o)
 }
 
 
-int
-main (int argc, char *argv[])
+static int
+spool_main (int argc, char *argv[])
 {
     if (argc != 2 && argc != 3)
         return help_exit (EXIT_FAILURE, argv[0]);
@@ -103,4 +103,51 @@ main (int argc, char *argv[])
     spoolkey_free (key);
 
     return EXIT_SUCCESS;
+}
+
+
+static int
+pick_main (int argc, char *argv[])
+{
+    fputs ("Unimplemented :-(\n", stderr);
+    return EXIT_SUCCESS;
+}
+
+
+int
+main (int argc, char *argv[])
+{
+    static const char *cmd_spool_names[] = { "spool-add", "spool", "add", NULL };
+    static const char *cmd_pick_names[] = { "spool-pick", "pick", NULL };
+
+    static const struct {
+        int (*run) (int, char*[]);
+        const char *const *names;
+    } cmds[] = {
+        { spool_main, cmd_spool_names },
+        { pick_main, cmd_pick_names },
+    };
+    static const __auto_type n_cmds = sizeof (cmds) / sizeof (cmds[0]);
+
+    if (argc == 2 && strcmp (argv[1], "--spool-list-all-command-applets") == 0) {
+        for (unsigned i = 0; i < n_cmds; i++) {
+            fputs (cmds[i].names[0], stdout);
+            putchar ('\n');
+        }
+        return EXIT_SUCCESS;
+    }
+
+    const char *cmd = strrchr (argv[0], '/');
+    cmd = cmd ? cmd + 1 : argv[0];
+
+    for (unsigned i = 0; i < n_cmds; i++) {
+        for (unsigned j = 0; cmds[i].names[j]; j++) {
+            if (strcmp (cmd, cmds[i].names[j]) == 0) {
+                return (*cmds[i].run) (argc, argv);
+            }
+        }
+    }
+
+    fprintf (stderr, "Unknown applet: %s\n", cmd);
+    return EXIT_FAILURE;
 }
