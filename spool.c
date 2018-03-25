@@ -17,7 +17,7 @@
 
 
 static int
-help_exit (int code, const char *argv0)
+help_add_exit (int code, const char *argv0)
 {
     fprintf (stderr, "Usage: %s <spooldir> [path]\n", argv0);
     exit (code);
@@ -59,12 +59,12 @@ copy_contents (FILE *i, FILE *o)
 
 
 static int
-spool_main (int argc, char *argv[])
+add_main (int argc, char *argv[])
 {
     if (argc != 2 && argc != 3)
-        return help_exit (EXIT_FAILURE, argv[0]);
+        return help_add_exit (EXIT_FAILURE, argv[0]);
     if (strcmp (argv[1], "--help") == 0 || strcmp (argv[1], "-h") == 0)
-        return help_exit (EXIT_SUCCESS, argv[0]);
+        return help_add_exit (EXIT_SUCCESS, argv[0]);
 
     FILE *fi = (argc == 3) ? fopen (argv[2], "rb") : stdin;
     if (!fi)
@@ -117,14 +117,14 @@ pick_main (int argc, char *argv[])
 int
 main (int argc, char *argv[])
 {
-    static const char *cmd_spool_names[] = { "spool-add", "spool", "add", NULL };
+    static const char *cmd_add_names[] = { "spool-add", "spool", "add", NULL };
     static const char *cmd_pick_names[] = { "spool-pick", "pick", NULL };
 
     static const struct {
         int (*run) (int, char*[]);
         const char *const *names;
     } cmds[] = {
-        { spool_main, cmd_spool_names },
+        { add_main, cmd_add_names },
         { pick_main, cmd_pick_names },
     };
     static const __auto_type n_cmds = sizeof (cmds) / sizeof (cmds[0]);
