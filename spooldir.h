@@ -71,7 +71,7 @@ typedef struct {
     enum spooldir_status status;
     spoolkey            *key;
     int                  fd;
-    uint8_t              __pad[SPOOLTXN__PAD];  /* For future expansion. */
+    uint8_t              __pad[SPOOLTXN__PAD];  /* Private. */
 } spooltxn;
 
 spoolkey* spooltxn_take_key (spooltxn *txn);
