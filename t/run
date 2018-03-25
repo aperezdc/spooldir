@@ -1,0 +1,75 @@
+#! /bin/bash
+set -euf
+
+keep_files=false
+if [[ $# -eq 1 && $1 = --keep ]] ; then
+	keep_files=true
+elif [[ $# -ne 0 ]] ; then
+	echo "Usage: $0 [--keep]" 1>&2
+	exit 1
+fi
+readonly keep_files
+
+# Obtain the absolute path to the tests directory
+pushd "$(dirname "$0")" &> /dev/null
+readonly T=$(pwd)
+popd &> /dev/null
+export T
+
+declare -a t_pass=( )
+declare -a t_fail=( )
+
+readonly tmpdir_base="${TMPDIR:-/tmp}/spooldir-test.$$.${RANDOM}"
+if ${keep_files} ; then
+	printf '=== tmpdir: %s ===\n' "${tmpdir_base}"
+fi
+
+mkdir -p "${tmpdir_base}/B"
+while read -r name ; do
+	ln -sf "$T/../spool" "${tmpdir_base}/B/${name}"
+done < <( "$T/../spool" --spool-list-all-command-applets )
+
+while read -r t ; do
+	name="${t##*/}"
+	name=${name%.test}
+	printf '%s ... ' "${name}"
+	tmpdir="${tmpdir_base}/T-${name}"
+	errfile="${tmpdir_base}/T-${name}.err"
+	outfile="${tmpdir_base}/T-${name}.out"
+	shfile="${tmpdir_base}/T-${name}.sh"
+	cat > "${shfile}" <<-EOF
+	#! /bin/bash
+	readonly TESTDIR='$T'
+	readonly TESTBIN='${tmpdir_base}/B'
+	readonly TESTTMP='${tmpdir}'
+	readonly TEST='${name##*/}'
+	$(< "$T/preamble")
+	$(< "$t")
+	EOF
+	if bash -ef "${shfile}" > "${outfile}" 2> "${errfile}" ; then
+		t_pass+=( "${name}" )
+		printf '[1;32mpassed[0;0m\n'
+	else
+		t_fail+=( "${name}" )
+		printf '[1;31mfailed[0;0m\n'
+	fi
+done < <( find "$T" -name '*.test' | sort -R )
+
+for name in "${t_fail[@]}" ; do
+	echo
+	printf '[1m===[0m %s.out\n' "${name}"
+	cat "${tmpdir_base}/T-${name}.out"
+	echo
+	printf '[1m===[0m %s.err\n' "${name}"
+	cat "${tmpdir_base}/T-${name}.err"
+	echo
+done
+
+printf '[1m===[0m passed/failed/total: [1;32m%d[0;0m/[1;31m%d[0;0m/[1m%d[0m\n' \
+	${#t_pass[@]} ${#t_fail[@]} $(( ${#t_pass[@]} + ${#t_fail[@]} ))
+
+${keep_files} || rm -rf "${tmpdir_base}"
+
+if [[ ${#t_fail[@]} -gt 0 ]] ; then
+	exit 1
+fi

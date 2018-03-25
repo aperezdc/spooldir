@@ -1,0 +1,6 @@
+S=$(tmpspooldir)
+content='File in spool created successfully'
+name=$(spool add "$S" <<< "${content}")
+[[ -r $S/new/${name} ]]
+[[ $(< "$S/new/${name}") = ${content} ]]
+[[ $(find "$S" -type f | wc -l) -eq 1 ]]

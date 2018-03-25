@@ -18,3 +18,8 @@ all: $E
 
 clean:
 	$(RM) $O $E
+
+test: $E
+	@t/run
+
+.PHONY: test

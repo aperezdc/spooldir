@@ -1,0 +1,31 @@
+#! /bin/bash
+#
+# preamble
+# Copyright (C) 2018 Adrian Perez <aperez@igalia.com>
+#
+# Distributed under terms of the MIT license.
+#
+
+function spool () {
+	local cmd=$1
+	shift
+	"${TESTBIN}/spool-${cmd}" "$@"
+}
+
+function fail () {
+	printf "(FF) "
+	printf "$@"
+	exit 1
+} 1>&2
+
+function warn () {
+	printf "(WW)"
+	printf "$@"
+} 1>&2
+
+tmpspooldir () {
+	local path="${TESTTMP}/spool-$(( t_preamble_tmpdir_spool_num++))"
+	mkdir -p "${path}"/{tmp,new,cur,wip}
+	echo "${path}"
+}
+
